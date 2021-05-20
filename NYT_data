@@ -1,0 +1,150 @@
+
+
+import numpy as np
+import scipy.io
+import time
+import numpy as np
+from math import factorial, exp, log, gamma, pow, sqrt 
+from scipy.special import digamma, gamma, loggamma
+import pandas as pd
+import matplotlib.pyplot as plt
+import pickle
+import copy
+from scipy import sparse
+from collections import Counter
+
+
+with open('/Users/Edith/Downloads/nyt/vocab.pkl', 'rb') as f:
+    words = pickle.load(f) #212,237 unique words
+
+
+tr_counts = scipy.io.loadmat('/Users/Edith/Downloads/nyt/bow_tr_counts.mat')
+tr_tokens = scipy.io.loadmat('/Users/Edith/Downloads/nyt/bow_tr_tokens.mat')
+
+counts = tr_counts.get('counts')[0] #1,368,205 total documents
+tok = tr_tokens.get('tokens')[0]#nonzero vocab indices for each document
+
+#new corpus size: number of documents and vocab size
+D=1000
+V=2000
+
+#turn into 2d array
+x= [counts[i][0] for i in range(D)]
+tok = [tok[i][0] for i in range(D)]
+
+#flatten x and tok
+flatx = [item for sublist in x for item in sublist] 
+flattok = [item for sublist in tok for item in sublist]
+
+#sort words by frequency 
+all = []
+for i in range(len(flatx)):
+    for j in range(flatx[i]):
+        all.append(flattok[i])
+pairs = Counter(all)
+
+#trim only most V most common words
+mostcommon = pairs.most_common(V)
+vocab = [p[0] for p in mostcommon]
+newtok = [[v if v in vocab else 0 for v in tok[i]] for i in range(D)]
+
+for i in range(D):
+    x[i] = [x[i][j] for j in np.array(newtok[i]).nonzero()]
+
+#final data: x is counts, newtok is new tokens vector 
+x = np.array(x)
+x = [x[i][0] for i in range(D)]
+
+tok = [[vocab.index(v) for v in newtok[i] if v!=0] for i in range(D)]
+
+#for non-ragged arrays
+c = np.zeros((D,V))
+for i in range(D):
+    uniq = 0
+    for j in tok[i]:
+        c[i][j] = x[i][uniq]
+        uniq +=1 
+
+x = np.array(c)
+
+#delete unneeded stuff
+del tr_counts
+del tr_tokens
+del counts
+del newtok
+del c
+del tok
+
+
+
+#set hyperparameters
+K= 10
+eta = .1
+alpha = 5/K
+
+#random initial conditions 
+
+lam1 = np.random.rand(K,V)
+gam1 = np.random.rand(D,K)
+
+phi1 = np.zeros((D,V,K))
+for i in range(D):
+    for j in x[i].nonzero():
+        phi1[i][j] = np.ones(K)*1/K
+
+lam2 = np.random.rand(K,V)
+gam2 = np.random.rand(D,K)
+phi2 = copy.deepcopy(phi1)
+
+
+#obtain optimal parameters
+l_1,g_1,p_1 = cavi(x, gam1, lam1,phi1, 100)
+l_2,g_2,p_2 = cavi(x, gam2, lam2,phi2, 100)
+
+#differences
+l_diff = l_2 - l_1
+g_diff = g_2 - g_1
+p_diff = p_2 - p_1
+
+
+#initialize beads uniformly spaced along line segment
+N=20
+lam_beads = [l_1 + t*l_diff for t in np.linspace(0,1,N)] 
+phi_beads = [p_1 + t*p_diff for t in np.linspace(0,1,N)]
+gam_beads = [g_1 + t*g_diff for t in np.linspace(0,1,N)]
+
+#run simplified string method
+lcmep, gcmep, pcmep = cavi_string(lam_beads,gam_beads,phi_beads,21)  
+lcmep, gcmep, pcmep = cavi_string(lam_beads,gam_beads,phi_beads,21)  
+
+
+
+#plot cross section (blue), MEP (green)
+y_1 = []
+iter_range = range(N)
+for d in iter_range: #straight line between 
+    y_1.append(ELBO(x, p_1+d/(M-1)*p_diff, g_1+d/(M-1)*g_diff, l_1+d/(M-1)*l_diff))
+
+z=[]
+for i in range(N):
+    z.append(ELBO(x, pcmep[i], gcmep[i], lcmep[i]))
+
+cmep = plt.scatter(range(len(z)),z,color = 'g')
+cmepline = plt.plot(range(len(z)),z, color = 'g')
+
+cs = plt.scatter(iter_range, y_1, color='b')
+csline = plt.plot(iter_range,y_1, color = 'b')
+
+plt.title('Paths between maxima')
+plt.ylabel('ELBO')
+plt.xlabel('Position along path')
+plt.legend((cs, cmep),
+           ('cs', 'cmep'),
+           scatterpoints=1,
+           loc='best',
+           fontsize=8)
+
+plt.show()
+print(z[0],z[-1])
+
+
