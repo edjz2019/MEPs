@@ -3,10 +3,6 @@
 import numpy as np
 import scipy.io
 import time
-import numpy as np
-from math import factorial, exp, log, gamma, pow, sqrt 
-from scipy.special import digamma, gamma, loggamma
-import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 import copy
