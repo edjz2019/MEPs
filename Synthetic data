@@ -1,0 +1,42 @@
+#making synthetic LDA data
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+K = 20 #set number of topics 
+D=2000 #number of documents
+V=4000 #number of unique vocabulary words
+Nd = 100 #number of words per document 
+
+beta = np.ones(V)*.01 #dirichlet parameter for topics over words; small b/c topics sparse in words
+alpha = np.ones(K)*.9 #dirichlet parameter for documents over topics; larger b/c documents can have a variety of topics 
+
+x = np.zeros((D,V))
+
+phi=[];
+for i in range(K):
+    phi.append(np.random.mtrand.dirichlet(beta))
+
+for i in range(D):
+    theta=(np.random.mtrand.dirichlet(alpha))
+   
+    for j in range(Nd):
+        z = np.random.multinomial(1,theta)  
+        z_assignment = 0 #z_assignment is in range(K)
+        for k in range(K):
+            if(z[k]==1):
+                break
+            z_assignment+=1
+           
+        w = np.random.multinomial(1,phi[z_assignment])
+        w_assignment=0
+        for k in range(V):
+            if(w[k]==1):
+                break
+            w_assignment+=1
+       
+        x[i][w_assignment]+=1
+        
+#result: x is DxV, with x[i][j] being count of word j in document i.
